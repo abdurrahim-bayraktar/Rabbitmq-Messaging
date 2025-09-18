@@ -1,3 +1,6 @@
+//
+// Created by user on 9/18/25.
+//
 #include <rmqa_connectionstring.h>
 #include <rmqa_producer.h>
 #include <rmqa_rabbitcontext.h>
@@ -27,18 +30,23 @@ int main()
     }
 
     // returns quickly; actual connect happens asynchronously
-    bsl::shared_ptr<rmqa::VHost> vhost = rabbit.createVHostConnection("program1",
+    bsl::shared_ptr<rmqa::VHost> vhost = rabbit.createVHostConnection("program2",
                                                                       vhostInfo.value());
 
+
+
     // declare a tiny topology: exchange + queue + binding
+    // NOTE: Must be IDENTICAL to Program 1's topology
     rmqa::Topology topology;
     rmqt::ExchangeHandle exchange = topology.addExchange("message-exchange");
-    rmqt::QueueHandle myQueue = topology.addQueue("program1-queue"); // This program's queue
-    rmqt::QueueHandle otherQueue = topology.addQueue("program2-queue"); // Other program's queue
+    rmqt::QueueHandle program1Queue = topology.addQueue("program1-queue"); // Other program's queue
+    rmqt::QueueHandle program2Queue = topology.addQueue("program2-queue");
+    rmqt::QueueHandle program3Queue = topology.addQueue("program3-queue");// This program's queue
 
-    // Bind queues to their respective routing keys
-    topology.bind(exchange, myQueue, "to-program1"); // I receive messages sent "to-program1"
-    topology.bind(exchange, otherQueue, "to-program2"); // Other program receives "to-program2"
+    // Bind queues to their respective routing keys (same as Program 1)
+    topology.bind(exchange, program1Queue, "to-program1"); // Program 1 receives "to-program1"
+    topology.bind(exchange, program2Queue, "to-program2"); // I receive messages sent "to-program2"
+    topology.bind(exchange, program3Queue, "to-program3");
 
     const uint16_t maxOutstandingConfirms = 10;
 
@@ -51,13 +59,12 @@ int main()
         return 1;
     }
 
-    bsl::shared_ptr<rmqa::Producer> producer = prodRes.value();
+
 
     // Consumer listens to MY queue
-    rmqt::Result<rmqa::Consumer> consRes = vhost->createConsumer
-    (
+    rmqt::Result<rmqa::Consumer> consRes = vhost->createConsumer(
         topology,
-        myQueue, // Listen to my own queue
+        program1Queue, // Listen to my own queue
         [](rmqp::MessageGuard& guard)
         {
             const rmqt::Message& m = guard.message();
@@ -66,8 +73,8 @@ int main()
             std::cout << "Received: '" << s << "'\n";
             std::cout.flush();
             guard.ack();
-        }
-    );
+        });
+
 
     if (!consRes)
     {
@@ -75,7 +82,21 @@ int main()
         return 1;
     }
 
-    std::cout << "Program 1 ready. Messages you type will be sent to Program 2.\n";
+    bsl::shared_ptr<rmqa::Producer> producer = prodRes.value();
+
+    unordered_map<int, string> selectMap{
+        {1, "to-program1"},
+        {2, "to-program2"},
+        {3, "to-program3"}
+    };
+    cout << "please enter the number of the user you like to message to (1-3)\n";
+    cout.flush();
+    int messageToSelecetor;
+
+    cin >> messageToSelecetor;
+    cin.ignore(10000,'\n');
+
+    std::cout << "Program 2 ready.\n";
     std::cout.flush();
 
     // Give time for connections to establish
@@ -89,24 +110,26 @@ int main()
         rmqt::Message msg(
             bsl::make_shared<bsl::vector<uint8_t>>(body.cbegin(), body.cend()));
 
-        // Send TO the other program (routing key "to-program2")
-        auto status = producer->send(
+        // Send TO the other program (routing key "to-program1")
+        auto status = producer->send
+        (
             msg,
-            "to-program2", // This routes to program2-queue
+            selectMap.at(messageToSelecetor), // This routes to program1-queue
             [](const rmqt::Message& message,
                const bsl::string& routingKey,
                const rmqt::ConfirmResponse& response)
             {
                 if (response.status() == rmqt::ConfirmResponse::ACK)
                 {
-                    std::cout << "Message sent to Program 2: " << message.guid() << "\n";
+                    std::cout << "Message sent to Program 1: " << message.guid() << "\n";
                     std::cout.flush();
                 }
                 else
                 {
                     std::cerr << "Message NOT confirmed: " << message.guid() << "\n";
                 }
-            });
+            }
+        );
 
         if (status != rmqp::Producer::SENDING)
         {

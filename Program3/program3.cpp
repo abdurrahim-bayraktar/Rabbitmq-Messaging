@@ -1,3 +1,6 @@
+//
+// Created by user on 9/18/25.
+//
 #include <rmqa_connectionstring.h>
 #include <rmqa_producer.h>
 #include <rmqa_rabbitcontext.h>
@@ -30,6 +33,8 @@ int main()
     bsl::shared_ptr<rmqa::VHost> vhost = rabbit.createVHostConnection("program2",
                                                                       vhostInfo.value());
 
+
+
     // declare a tiny topology: exchange + queue + binding
     // NOTE: Must be IDENTICAL to Program 1's topology
     rmqa::Topology topology;
@@ -54,12 +59,12 @@ int main()
         return 1;
     }
 
-    bsl::shared_ptr<rmqa::Producer> producer = prodRes.value();
+
 
     // Consumer listens to MY queue
     rmqt::Result<rmqa::Consumer> consRes = vhost->createConsumer(
         topology,
-        program2Queue, // Listen to my own queue
+        program3Queue, // Listen to my own queue
         [](rmqp::MessageGuard& guard)
         {
             const rmqt::Message& m = guard.message();
@@ -70,16 +75,19 @@ int main()
             guard.ack();
         });
 
+
     if (!consRes)
     {
         std::cerr << "Failed to create consumer\n";
         return 1;
     }
 
+    bsl::shared_ptr<rmqa::Producer> producer = prodRes.value();
+
     unordered_map<int, string> selectMap{
-            {1, "to-program1"},
-            {2, "to-program2"},
-            {3, "to-program3"}
+        {1, "to-program1"},
+        {2, "to-program2"},
+        {3, "to-program3"}
     };
     cout << "please enter the number of the user you like to message to (1-3)\n";
     cout.flush();
