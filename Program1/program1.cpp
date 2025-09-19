@@ -99,9 +99,9 @@ int main()
     }
     producer->waitForConfirms();
 
-    rmqt::Result<rmqa::Consumer> consRes = vhost->createConsumer(
+    rmqt::Result<rmqa::Consumer> connRes = vhost->createConsumer(
         topology,
-        "return", // Listen to my own queue
+        returnQueue, // Listen to my own queue
         [](rmqp::MessageGuard& guard)
         {
             const rmqt::Message& m = guard.message();
